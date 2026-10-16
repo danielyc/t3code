@@ -91,18 +91,19 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Upstream nightly: $tag (build: $build)"
 
+      # actions/checkout trips over the orphaned gitlinks in upstream's
+      # vendored .repos tree, so check out by hand like upstream's release does.
       - name: Checkout upstream nightly
         if: steps.resolve.outputs.build == 'true'
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.UPSTREAM_REPOSITORY }}
-          ref: refs/tags/${{ steps.resolve.outputs.tag }}
-          fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git init --quiet .
+          git remote add origin "$GITHUB_SERVER_URL/$UPSTREAM_REPOSITORY.git"
+          git fetch --quiet --no-tags origin "+refs/heads/main:refs/remotes/origin/main" "+refs/tags/$TAG:refs/tags/$TAG"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --quiet --detach "refs/tags/$TAG"
 
       - name: Apply patch branches
         if: steps.resolve.outputs.build == 'true'
@@ -228,16 +229,16 @@ jobs:
             exit 1
           fi
 
+      # actions/checkout trips over the orphaned gitlinks in upstream's
+      # vendored .repos tree, so check out by hand like upstream's release does.
       - name: Checkout upstream nightly
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.UPSTREAM_REPOSITORY }}
-          ref: refs/tags/${{ env.TAG }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        run: |
+          set -euo pipefail
+          git init --quiet .
+          git remote add origin "$GITHUB_SERVER_URL/$UPSTREAM_REPOSITORY.git"
+          git fetch --quiet --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --quiet --detach "refs/tags/$TAG"
 
       - name: Download patch
         uses: actions/download-artifact@v4
@@ -391,16 +392,17 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
     steps:
+      # actions/checkout trips over the orphaned gitlinks in upstream's
+      # vendored .repos tree, so check out by hand like upstream's release does.
       - name: Checkout upstream nightly
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.UPSTREAM_REPOSITORY }}
-          ref: refs/tags/${{ env.TAG }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init --quiet .
+          git remote add origin "$GITHUB_SERVER_URL/$UPSTREAM_REPOSITORY.git"
+          git fetch --quiet --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git -c checkout.workers=0 checkout --quiet --detach "refs/tags/$TAG"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
