@@ -12,7 +12,7 @@ This is [pingdotgg/t3code#17618](https://github.com/pingdotgg/t3code/pull/17618)
 
 ## How it stays current
 
-Every hour a [workflow](.github/workflows/patched-nightly.yml) checks for a new upstream nightly, applies the patch, and builds macOS, Windows and Linux (x64 and arm64). A new patched nightly usually follows the official one within an hour or two, with the same version number. A release is only published when every platform built.
+Every hour a scheduled job checks for a new upstream nightly and starts a [workflow](.github/workflows/patched-nightly.yml) that applies the patch and builds macOS, Windows and Linux (x64 and arm64). A new patched nightly usually follows the official one within an hour or two, with the same version number. A release is only published when every platform built.
 
 The app updates itself from this fork's releases, so once installed it stays on the patched nightly.
 
