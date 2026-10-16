@@ -12,7 +12,7 @@ This is [pingdotgg/t3code#17618](https://github.com/pingdotgg/t3code/pull/17618)
 
 ## How it stays current
 
-Every six hours a T3 Code task checks for a new upstream nightly and runs the [workflow](.github/workflows/patched-nightly.yml), which applies the patch and builds macOS, Windows and Linux (x64 and arm64). A new patched nightly follows the official one within about six hours, with the same version number. When a new nightly breaks the patch, the task adapts it and tries again. A release is only published when every platform built.
+Every hour a [workflow](.github/workflows/patched-nightly.yml) checks for a new upstream nightly, applies the patch, and builds macOS, Windows and Linux (x64 and arm64). A new patched nightly usually follows the official one within an hour or two, with the same version number. A release is only published when every platform built.
 
 The app updates itself from this fork's releases, so once installed it stays on the patched nightly.
 
@@ -72,7 +72,7 @@ Merge the keys into your existing file rather than replacing it. New Claude sess
 
 ## Maintenance
 
-A T3 Code scheduled task starts the workflow for each new nightly. When the patch stops applying, it merges upstream `main` into the patch branch, adapts the patch, runs its tests and typechecks, and pushes only when they pass. To do it by hand: merge upstream `main` into the patch branch, resolve, push, and run the workflow from the Actions tab.
+A T3 Code scheduled task checks these runs every six hours. When one fails, it fixes the cause (for example by merging upstream `main` into a patch branch and adapting the patch), pushes only when the patch's tests and typechecks pass, and runs the workflow again. To do it by hand: merge upstream `main` into the patch branch, resolve, push, and run the workflow from the Actions tab.
 
 Patch branches:
 

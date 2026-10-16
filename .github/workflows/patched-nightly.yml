@@ -5,9 +5,10 @@ name: Patched nightly
 # this fork. Installed builds update from this fork's releases, so they follow
 # every new upstream nightly with the patches kept.
 
-# Started by a T3 Code scheduled task that also repairs the patch branches
-# when a new nightly breaks them, so the workflow has no schedule of its own.
 on:
+  schedule:
+    # Avoid minute zero, when GitHub scheduled jobs are busiest.
+    - cron: "41 * * * *"
   workflow_dispatch:
     inputs:
       tag:
@@ -54,8 +55,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_REBUILD: ${{ inputs.rebuild }}
+          HAS_SIGNING_SECRETS: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
         run: |
           set -euo pipefail
+          # Scheduled runs wait quietly for the signing secrets. A manual run
+          # still builds, and its macOS jobs name the missing secrets.
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$HAS_SIGNING_SECRETS" != "true" ]]; then
+            echo "::warning::Skipping: the macOS signing secrets are not set yet."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tag="${INPUT_TAG:-}"
           if [[ -z "$tag" ]]; then
             tag="$(gh api "repos/$UPSTREAM_REPOSITORY/releases?per_page=50" --jq \
