@@ -72,8 +72,6 @@ Merge the keys into your existing file rather than replacing it. New Claude sess
 
 ## Maintenance
 
-A T3 Code scheduled task checks these runs every six hours. When one fails, it fixes the cause (for example by merging upstream `main` into a patch branch and adapting the patch), pushes only when the patch's tests and typechecks pass, and runs the workflow again. To do it by hand: merge upstream `main` into the patch branch, resolve, push, and run the workflow from the Actions tab.
-
 Patch branches:
 
 - `feat/claude-prompt-ghost-text`: the prompt suggestions feature.
