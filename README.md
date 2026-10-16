@@ -25,7 +25,19 @@ The app updates itself from this fork's releases, so once installed it stays on 
 2. Install it over your existing T3 Code (Nightly). It keeps your threads and settings.
 3. Turn it on: **Settings → Providers → Claude → Prompt suggestions**. It is off by default.
 
-To go back, install the official nightly from [pingdotgg/t3code releases](https://github.com/pingdotgg/t3code/releases). It updates from upstream again.
+## Going back to the official nightly
+
+You can switch back at any time. Your threads, projects and settings stay where they are.
+
+1. Open [pingdotgg/t3code releases](https://github.com/pingdotgg/t3code/releases) and pick the newest release whose name contains `nightly` (not `preview`). Download the same kind of file as above.
+2. Quit T3 Code.
+3. Install the official build over the patched one:
+   - macOS: open the DMG and drag T3 Code (Nightly) to Applications, choosing **Replace**.
+   - Windows: run the installer.
+   - Linux: use the official AppImage and delete the patched one.
+4. Start it. From then on it updates from upstream again, never from this fork.
+
+On macOS the official app may ask for keychain access once, as when you switched. The official build ignores the Prompt suggestions setting, so if you ever come back here you may need to turn it on again. The `~/.claude/settings.json` change below can stay or go: the Claude Code CLI uses the same setting.
 
 ## Getting suggestions as often as possible
 
