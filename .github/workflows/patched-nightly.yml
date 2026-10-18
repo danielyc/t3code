@@ -293,12 +293,14 @@ jobs:
         run: node scripts/update-release-package-versions.ts "$VERSION"
 
       # Apple's ticket lookup sometimes drops the connection although the app is
-      # notarized, and @electron/notarize only retries stapling for a few seconds.
-      - name: Retry stapler on network errors
+      # notarized, and @electron/notarize only retries stapling for a few seconds,
+      # so any stapler failure is retried. Apple's timestamp server sometimes
+      # answers signing without a timestamp, and nothing retries that at all.
+      - name: Retry stapler and codesign timestamps
         if: matrix.platform == 'mac'
         run: |
           set -euo pipefail
-          shim_dir="$RUNNER_TEMP/xcrun-retry"
+          shim_dir="$RUNNER_TEMP/apple-retry"
           mkdir -p "$shim_dir"
           cat > "$shim_dir/xcrun" <<'EOF'
           #!/bin/bash
@@ -312,7 +314,35 @@ jobs:
             attempt=$((attempt + 1))
           done
           EOF
-          chmod +x "$shim_dir/xcrun"
+          # Only forced signing is safe to repeat as is.
+          cat > "$shim_dir/codesign" <<'EOF'
+          #!/bin/bash
+          forced=false
+          signing=false
+          for arg in "$@"; do
+            case "$arg" in
+              --force) forced=true ;;
+              --sign) signing=true ;;
+            esac
+          done
+          if [ "$forced" != true ] || [ "$signing" != true ]; then exec /usr/bin/codesign "$@"; fi
+          stderr_file="$(mktemp)"
+          trap 'rm -f "$stderr_file"' EXIT
+          attempt=1
+          while true; do
+            status=0
+            /usr/bin/codesign "$@" 2>"$stderr_file" || status=$?
+            cat "$stderr_file" >&2
+            if [ "$status" -eq 0 ]; then exit 0; fi
+            if [ "$attempt" -ge 5 ] || ! grep -q "A timestamp was expected but was not found" "$stderr_file"; then
+              exit "$status"
+            fi
+            echo "codesign: attempt $attempt got no timestamp, retrying" >&2
+            sleep $((attempt * 15))
+            attempt=$((attempt + 1))
+          done
+          EOF
+          chmod +x "$shim_dir/xcrun" "$shim_dir/codesign"
           echo "$shim_dir" >> "$GITHUB_PATH"
 
       - name: Build desktop artifact
@@ -465,11 +495,12 @@ jobs:
           set -euo pipefail
           # The built commit itself is not pushed: it carries upstream workflow
           # changes, which the workflow token may not push. The notes name the
-          # upstream tag and each branch head instead.
+          # upstream tag and each branch head instead. The tag lands on the
+          # default branch head at publish time, because GitHub refuses a tag on
+          # this run's commit once that branch has moved to other workflow files.
           gh release delete "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
             --prerelease \
             --latest=false \
             --title "T3 Code Nightly $VERSION (patched)" \
