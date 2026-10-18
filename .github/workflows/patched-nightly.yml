@@ -292,6 +292,29 @@ jobs:
       - name: Align package versions
         run: node scripts/update-release-package-versions.ts "$VERSION"
 
+      # Apple's ticket lookup sometimes drops the connection although the app is
+      # notarized, and @electron/notarize only retries stapling for a few seconds.
+      - name: Retry stapler on network errors
+        if: matrix.platform == 'mac'
+        run: |
+          set -euo pipefail
+          shim_dir="$RUNNER_TEMP/xcrun-retry"
+          mkdir -p "$shim_dir"
+          cat > "$shim_dir/xcrun" <<'EOF'
+          #!/bin/bash
+          if [ "${1:-}" != stapler ]; then exec /usr/bin/xcrun "$@"; fi
+          attempt=1
+          until /usr/bin/xcrun "$@"; do
+            status=$?
+            if [ "$attempt" -ge 5 ]; then exit "$status"; fi
+            echo "xcrun $*: attempt $attempt failed with $status, retrying" >&2
+            sleep $((attempt * 15))
+            attempt=$((attempt + 1))
+          done
+          EOF
+          chmod +x "$shim_dir/xcrun"
+          echo "$shim_dir" >> "$GITHUB_PATH"
+
       - name: Build desktop artifact
         env:
           T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: ${{ steps.resource_monitor_cache.outputs.cache-hit == 'true' }}
@@ -334,12 +357,7 @@ jobs:
           echo "App: $app"
           codesign --verify --deep --strict "$app"
           spctl --assess --type execute --verbose "$app"
-          # Apple's ticket lookup sometimes drops the connection although the app is notarized.
-          for attempt in 1 2 3 4 5; do
-            xcrun stapler validate "$app" && break
-            [ "$attempt" -lt 5 ] || exit 1
-            sleep $((attempt * 30))
-          done
+          xcrun stapler validate "$app"
           grep -q "owner: ${GITHUB_REPOSITORY%%/*}" "$app/Contents/Resources/app-update.yml"
 
       - name: Collect release assets
