@@ -308,9 +308,9 @@ jobs:
           attempt=1
           until /usr/bin/xcrun "$@"; do
             status=$?
-            if [ "$attempt" -ge 5 ]; then exit "$status"; fi
+            if [ "$attempt" -ge 6 ]; then exit "$status"; fi
             echo "xcrun $*: attempt $attempt failed with $status, retrying" >&2
-            sleep $((attempt * 15))
+            sleep $((attempt < 4 ? attempt * 30 : 120))
             attempt=$((attempt + 1))
           done
           EOF
@@ -374,7 +374,23 @@ jobs:
             # electron-builder signs on its own when it finds these.
             unset CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
           fi
-          node scripts/build-desktop-artifact.ts "${args[@]}"
+          # Runner network outages (DNS for the Electron download, Apple's ticket
+          # lookup while stapling) can outlast the tools' own retries, so a build
+          # that failed on one gets a second full run.
+          log="$RUNNER_TEMP/build-desktop-artifact.log"
+          attempt=1
+          while true; do
+            status=0
+            node scripts/build-desktop-artifact.ts "${args[@]}" 2>&1 | tee "$log" || status=$?
+            if [[ "$status" -eq 0 ]]; then break; fi
+            if [[ "$attempt" -ge 2 ]] || ! grep -q -E "ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|The network connection was lost|Failed to staple" "$log"; then
+              exit "$status"
+            fi
+            echo "::warning::Build attempt $attempt failed on a network error, retrying."
+            rm -rf release
+            sleep 60
+            attempt=$((attempt + 1))
+          done
 
       - name: Verify macOS signature, notarization and update feed
         if: matrix.platform == 'mac'
