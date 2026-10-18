@@ -334,7 +334,12 @@ jobs:
           echo "App: $app"
           codesign --verify --deep --strict "$app"
           spctl --assess --type execute --verbose "$app"
-          xcrun stapler validate "$app"
+          # Apple's ticket lookup sometimes drops the connection although the app is notarized.
+          for attempt in 1 2 3 4 5; do
+            xcrun stapler validate "$app" && break
+            [ "$attempt" -lt 5 ] || exit 1
+            sleep $((attempt * 30))
+          done
           grep -q "owner: ${GITHUB_REPOSITORY%%/*}" "$app/Contents/Resources/app-update.yml"
 
       - name: Collect release assets
