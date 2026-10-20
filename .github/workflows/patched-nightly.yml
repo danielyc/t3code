@@ -527,9 +527,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # createdAt is the tagged commit's date, which every release shares
+          # because tags land on the branch head; only publishedAt orders them.
           set -euo pipefail
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
-            --jq "[.[] | select(.tagName | endswith(\"$RELEASE_SUFFIX\"))] | sort_by(.createdAt) | reverse | .[$KEEP_RELEASES:][].tagName" |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,publishedAt \
+            --jq "[.[] | select(.tagName | endswith(\"$RELEASE_SUFFIX\"))] | sort_by(.publishedAt) | reverse | .[$KEEP_RELEASES:][].tagName" |
             while read -r old_tag; do
               echo "Deleting $old_tag"
               gh release delete "$old_tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
