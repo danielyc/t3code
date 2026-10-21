@@ -253,18 +253,26 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     assert.isUndefined(options.extraArgs?.["dangerously-skip-permissions"]);
   });
 
-  it("asks the SDK for prompt suggestions only when the setting is on", () => {
-    const optionsFor = (settings: ClaudeSettings) =>
-      ClaudeAdapterV2.makeClaudeQueryOptions({
-        modelSelection: CLAUDE_TEST_MODEL_SELECTION,
-        nativeThreadId: "native-thread-prompt-suggestions",
-        resume: false,
-        cwd: "/workspace",
-        settings,
-      });
-
-    assert.isUndefined(optionsFor(DEFAULT_CLAUDE_SETTINGS).promptSuggestions);
-    assert.isTrue(optionsFor(PROMPT_SUGGESTIONS_CLAUDE_SETTINGS).promptSuggestions);
+  it("gives delegated children Claude's subagent prompt cache TTL", () => {
+    const lineage = (relationshipToParent: "fork" | "subagent" | null) => ({
+      lineage: {
+        parentThreadId: null,
+        relationshipToParent,
+        rootThreadId: ThreadId.make("thread-root"),
+      },
+    });
+    const env = { PATH: "/bin" };
+    const ttl = (environment: NodeJS.ProcessEnv, ...args: Parameters<typeof lineage>) =>
+      ClaudeAdapterV2.claudeQueryEnvironment(environment, lineage(...args), "5m")
+        .CLAUDE_CODE_PROMPT_CACHE_TTL;
+    assert.equal(ttl(env, "subagent"), "5m");
+    assert.isUndefined(ttl(env, null));
+    assert.isUndefined(ttl(env, "fork"));
+    assert.equal(ttl({ ...env, CLAUDE_CODE_PROMPT_CACHE_TTL: "1h" }, "subagent"), "1h");
+    assert.strictEqual(
+      ClaudeAdapterV2.claudeQueryEnvironment(env, lineage("subagent"), undefined),
+      env,
+    );
   });
 
   it("projects AskUserQuestion input with question text as the answer key", () => {
@@ -331,6 +339,20 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
       allowedTools: ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS,
       installPermissionCallback: false,
     });
+  });
+
+  it("asks the SDK for prompt suggestions only when the setting is on", () => {
+    const optionsFor = (settings: ClaudeSettings) =>
+      ClaudeAdapterV2.makeClaudeQueryOptions({
+        modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+        nativeThreadId: "native-thread-prompt-suggestions",
+        resume: false,
+        cwd: "/workspace",
+        settings,
+      });
+
+    assert.isUndefined(optionsFor(DEFAULT_CLAUDE_SETTINGS).promptSuggestions);
+    assert.isTrue(optionsFor(PROMPT_SUGGESTIONS_CLAUDE_SETTINGS).promptSuggestions);
   });
 
   it("does not auto-allow reads for canonical restricted read-only never policy", () => {
