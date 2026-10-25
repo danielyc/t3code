@@ -18,12 +18,7 @@ export type ProviderOrchestrationAdapterInfrastructure =
   | CursorKeychain.CursorKeychain
   | IdAllocator.IdAllocatorV2;
 
-/**
- * `providerContinuationRequestsLayer` must be the same layer reference the
- * orchestration runtime provides to its continuation worker so Effect layer
- * memoization yields one shared queue. `PromptSuggestions.layer` likewise
- * matches the server's WebSocket routes.
- */
+/** Reuse the exact layer references the continuation worker and WebSocket routes use so memoization shares one instance. */
 export const layer = Layer.mergeAll(
   ClaudeAdapterV2.layerQueryRunner,
   CodexAdapterV2.layerAppServerClientFactory,
