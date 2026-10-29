@@ -34,7 +34,7 @@ import {
   type LucideIcon,
   MessagesSquareIcon,
   Redo2Icon,
-  Undo2Icon,
+  PencilIcon,
 } from "lucide-react";
 import { Link as LinkIconNode } from "lucide";
 import { Button, InlineButton } from "../ui/button";
@@ -524,6 +524,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                           ctx.onImageExpand(preview);
                         }}
                       >
+                        {/* Isolate the thumbnail raster from nearby activity repaints in Chromium. */}
                         <AttachmentImage
                           name={image.name}
                           mimeType={image.mimeType}
@@ -531,7 +532,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                           alt={image.name}
                           decoding="async"
                           loading="lazy"
-                          className="block size-full object-cover"
+                          className="block size-full transform-gpu object-cover"
                         />
                       </button>
                     ) : (
@@ -743,7 +744,7 @@ function RevertUserMessageButton({
           />
         }
       >
-        <Undo2Icon className="size-3" />
+        <PencilIcon className="size-3" />
       </TooltipTrigger>
       <TooltipPopup side="top">Edit from here</TooltipPopup>
     </Tooltip>
