@@ -17,6 +17,7 @@ import {
   ComposerContextRecord,
   DeviceOperationError,
   DeviceSummary,
+  KEEP_WARM_TEXT,
   OrchestratorMcpTaskRole,
   ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -2245,6 +2246,24 @@ const decodeBaselineRow = Schema.decodeUnknownEffect(
   ),
 );
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+// Cases name text T3 Code sends on its own by placeholder, so they test this checkout's copy.
+const SOURCE_TEXT: Readonly<Record<string, string>> = { "{{KEEP_WARM_TEXT}}": KEEP_WARM_TEXT };
+const sourceText = (value: string) => SOURCE_TEXT[value] ?? value;
+const withSourceText = (testCase: McpToolUseCase): McpToolUseCase => ({
+  ...testCase,
+  prompt: sourceText(testCase.prompt),
+  setup: {
+    ...testCase.setup,
+    ...(testCase.setup.priorTurns === undefined
+      ? {}
+      : {
+          priorTurns: testCase.setup.priorTurns.map((turn) =>
+            turn.text === undefined ? turn : { ...turn, text: sourceText(turn.text) },
+          ),
+        }),
+  },
+});
 const string = { type: "string" } as const;
 
 const main = Effect.gen(function* () {
@@ -2295,7 +2314,9 @@ const main = Effect.gen(function* () {
       .filter((name) => name.endsWith(".ndjson"))
       .toSorted()
       .map((name) => path.join(casesDir, name));
-  const cases = (yield* Effect.forEach(caseFiles, (file) => readNdjson(file, decodeCase))).flat();
+  const cases = (yield* Effect.forEach(caseFiles, (file) => readNdjson(file, decodeCase)))
+    .flat()
+    .map(withSourceText);
   const wanted = flags.case?.flatMap((ids) => ids.split(","));
   const codex = isCodex(flags.model);
   const harness = codex ? "codex" : "claude";

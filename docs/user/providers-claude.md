@@ -82,6 +82,29 @@ Claude Code holds the turn until that window reopens, so it can keep showing as
 working. Wait for the reset, or stop the turn and continue later. The warning's
 timestamp shows when the displayed wait started.
 
+## Keep context warm
+
+Claude's prompt cache lasts about an hour on a Claude subscription and 5 minutes
+with an API key, Bedrock, or Vertex. Once it expires, your next message pays to
+read the whole conversation again. To avoid that, T3 Code can send an idle thread
+a short message just before its cache expires, and keep doing so while the
+thread stays idle.
+
+Turn on **Keep context warm** in a Claude provider's settings to make it the
+default for that provider's threads. On web and desktop, the **Keep context
+warm** switch in a thread's details card changes it for that thread only; its
+tooltip says whether the thread follows the provider default.
+
+- Each message is a short turn that appears as a collapsed **Kept context warm**
+  row, and back-to-back messages share one row. They count toward your usage
+  like any turn: about one an hour on a subscription, about 12 an hour with a
+  5-minute cache.
+- Messages pause while the thread is archived, settled, or snoozed, or while a
+  goal is active. They stop after a failed or stopped turn, or when the cache
+  has already expired, and start again after your next turn.
+- While a thread keeps its context warm, **Compact idle threads** does not
+  compact it before the cache expires.
+
 ## Skills
 
 Claude skills come from the config directory's `skills` folder and the project's
