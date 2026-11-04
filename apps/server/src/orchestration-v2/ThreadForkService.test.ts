@@ -191,22 +191,25 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
   }),
 );
 
-it.effect("starts a fork without the source thread's pending title regeneration", () =>
-  Effect.gen(function* () {
-    const sourceRun = makeSourceRun("completed");
-    const titleRegeneration = {
-      requestId: CommandId.make("command:fork-source-title"),
-      startedAt: snoozedAt,
-    };
-    const sourceProjection = {
-      ...makeSourceProjection(sourceRun),
-      thread: { ...makeSourceThread(), titleRegeneration },
-    };
-    const result = yield* planFork(sourceRun, sourceProjection);
+it.effect(
+  "starts a fork without the source thread's pending title regeneration or keep-warm override",
+  () =>
+    Effect.gen(function* () {
+      const sourceRun = makeSourceRun("completed");
+      const titleRegeneration = {
+        requestId: CommandId.make("command:fork-source-title"),
+        startedAt: snoozedAt,
+      };
+      const sourceProjection = {
+        ...makeSourceProjection(sourceRun),
+        thread: { ...makeSourceThread(), titleRegeneration, keepContextWarm: true },
+      };
+      const result = yield* planFork(sourceRun, sourceProjection);
 
-    assert.isNull(result.targetThread.titleRegeneration);
-    assert.deepEqual(sourceProjection.thread.titleRegeneration, titleRegeneration);
-  }),
+      assert.isNull(result.targetThread.titleRegeneration);
+      assert.isNull(result.targetThread.keepContextWarm);
+      assert.deepEqual(sourceProjection.thread.titleRegeneration, titleRegeneration);
+    }),
 );
 
 it.effect("preserves pull request context without inheriting any watches", () =>

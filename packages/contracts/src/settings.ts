@@ -733,6 +733,16 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    // Kept out of `order` so this patch never edits the line other fork patches change; renders last.
+    keepContextWarm: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({
+        title: "Keep context warm",
+        description:
+          "Send a short message just before an idle thread's prompt cache expires, so the next turn reads from cache instead of paying for it again. Each thread can override this in its details.",
+        providerSettingsForm: { control: "switch" },
+      }),
+    ),
     launchArgs: Schema.String.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
@@ -1486,6 +1496,22 @@ export const resolveIdleCompaction = (
     Option.getOrElse(() => "default" as const),
   );
   return override === "default" ? globalIdleCompaction(settings) : override;
+};
+
+/** Whether an idle thread on this Claude instance keeps its prompt cache warm. */
+export const resolveKeepContextWarm = (
+  settings: Pick<ServerSettings, "providerInstances">,
+  instanceId: ProviderInstanceId,
+  threadOverride: boolean | null | undefined,
+): boolean => {
+  if (threadOverride != null) return threadOverride;
+  const instance = Object.hasOwn(settings.providerInstances, instanceId)
+    ? settings.providerInstances[instanceId]
+    : undefined;
+  return decodeClaudeSettings(instance?.config ?? {}).pipe(
+    Option.map((config) => config.keepContextWarm),
+    Option.getOrElse(() => false),
+  );
 };
 
 export const ServerSettingsOperation = Schema.Literals([

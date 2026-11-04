@@ -16,6 +16,7 @@ import {
   idleCompactionPatch,
   requiredScopesForProjectMutation,
   resolveIdleCompaction,
+  resolveKeepContextWarm,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
   ServerSettings,
@@ -248,6 +249,26 @@ describe("custom model settings", () => {
       "bare-slug",
       { slug: "named", name: "Named", capabilities },
     ]);
+  });
+});
+
+describe("resolveKeepContextWarm", () => {
+  it("follows the Claude instance default unless the thread overrides it", () => {
+    const settings = decodeServerSettings({
+      providerInstances: {
+        claude_work: { driver: "claudeAgent", config: { keepContextWarm: true } },
+        claude_personal: { driver: "claudeAgent" },
+      },
+    });
+    const work = ProviderInstanceId.make("claude_work");
+    const personal = ProviderInstanceId.make("claude_personal");
+    expect(resolveKeepContextWarm(settings, work, null)).toBe(true);
+    expect(resolveKeepContextWarm(settings, work, false)).toBe(false);
+    expect(resolveKeepContextWarm(settings, personal, undefined)).toBe(false);
+    expect(resolveKeepContextWarm(settings, personal, true)).toBe(true);
+    expect(resolveKeepContextWarm(settings, ProviderInstanceId.make("claudeAgent"), null)).toBe(
+      false,
+    );
   });
 });
 

@@ -29,6 +29,7 @@ import {
   type ThreadPullRequestLink,
   isLiveSubagentShell,
   isListedThreadLineage,
+  KEEP_WARM_TEXT,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -4807,6 +4808,9 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     ["a typed /compact", "user", "mobile", undefined, false, "/compact"],
     ["a normalized idle command", "agent", "server", undefined, true, " \t\u00a0/COMPACT\u3000\n"],
     ["an ordinary prompt with idle metadata", "user", "web", "onReturn", false, "Continue"],
+    ["T3 Code's keep-warm ping", "agent", "server", undefined, true, KEEP_WARM_TEXT],
+    ["a pasted keep-warm ping", "user", "web", undefined, false, KEEP_WARM_TEXT],
+    ["an edited keep-warm ping", "agent", "server", undefined, false, `${KEEP_WARM_TEXT}!`],
   ] as const)(
     "keeps the shell on the user's last turn only during %s",
     ([name, createdBy, creationSource, idleCompaction, silent, text]) =>

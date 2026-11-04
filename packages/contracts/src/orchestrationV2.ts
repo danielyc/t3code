@@ -485,6 +485,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   lastSnoozeWakeAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  /** Overrides the Claude instance's keep-context-warm default; null or absent follows it. */
+  keepContextWarm: Schema.optional(Schema.NullOr(Schema.Boolean)),
   guestShare: Schema.optional(Schema.NullOr(ThreadGuestShare)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -585,6 +587,24 @@ export function idleCompactionOf(
   return message.createdBy === "agent" && message.creationSource === "server"
     ? "beforeCacheExpires"
     : undefined;
+}
+
+/**
+ * The prompt T3 Code sends to keep an idle Claude thread's prompt cache warm. Pings are recognized
+ * by this exact text from the server, so a reworded ping would show old ones as plain prompts.
+ */
+export const KEEP_WARM_TEXT =
+  'Automatic keep-alive from T3 Code, not from the user. It only keeps your prompt cache warm. Reply with just "ok". Do not use tools or continue any task.';
+
+/** A prompt T3 Code sent on its own to keep the prompt cache warm. */
+export function isKeepWarmMessage(message: CompactionMessageFields): boolean {
+  return (
+    message.role === "user" &&
+    message.text === KEEP_WARM_TEXT &&
+    (message.attachments?.length ?? 0) === 0 &&
+    message.createdBy === "agent" &&
+    message.creationSource === "server"
+  );
 }
 
 export const OrchestrationV2RunStatus = Schema.Literals([
@@ -2131,6 +2151,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   snoozedUntil: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   snoozedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
+  keepContextWarm: Schema.optional(Schema.NullOr(Schema.Boolean)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -3055,6 +3076,8 @@ export const OrchestrationV2Command = Schema.Union([
     /** Reject unless no message or run has landed on this thread. */
     expectedEmpty: Schema.optional(Schema.Boolean),
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
+    /** Set the thread's keep-context-warm override, or null to follow the default. */
+    keepContextWarm: Schema.optional(Schema.NullOr(Schema.Boolean)),
     /** Link (object) or unlink (null) a pull request; absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   }),
