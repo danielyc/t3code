@@ -52,7 +52,13 @@ import type {
   ScheduledTaskId,
   TurnItemId,
 } from "@t3tools/contracts";
-import { idleCompactionOf, isCompactionCommandMessage, RunId, ThreadId } from "@t3tools/contracts";
+import {
+  idleCompactionOf,
+  isCompactionCommandMessage,
+  isKeepWarmMessage,
+  RunId,
+  ThreadId,
+} from "@t3tools/contracts";
 import {
   classifyToolActivity,
   collectToolFilePaths,
@@ -1309,6 +1315,45 @@ function isUserMessageEntry(entry: ThreadFeedEntry | undefined): boolean {
   return entry?.type === "message" && entry.message.role === "user";
 }
 
+function isKeepWarmEntry(entry: ThreadFeedEntry): boolean {
+  return entry.type === "message" && isKeepWarmMessage(entry.message);
+}
+
+interface KeepWarmFold {
+  readonly runId: RunId;
+  readonly createdAt: string;
+  readonly entryIds: Set<string>;
+  readonly runIds: Set<RunId>;
+}
+
+/** Back-to-back keep-warm turns fold into one row, keyed by the first entry of the first turn. */
+function deriveKeepWarmFolds(
+  feed: ReadonlyArray<ThreadFeedEntry>,
+): ReadonlyMap<string, KeepWarmFold> {
+  const keepWarmRunIds = new Set<RunId>();
+  for (const entry of feed) {
+    if (entry.type === "message" && entry.message.runId !== null && isKeepWarmEntry(entry))
+      keepWarmRunIds.add(entry.message.runId);
+  }
+  const folds = new Map<string, KeepWarmFold>();
+  if (keepWarmRunIds.size === 0) return folds;
+  let current: KeepWarmFold | null = null;
+  for (const entry of feed) {
+    const runId = feedEntryRunId(entry);
+    if (runId === null || !keepWarmRunIds.has(runId)) {
+      current = null;
+      continue;
+    }
+    if (current === null) {
+      current = { runId, createdAt: entry.createdAt, entryIds: new Set(), runIds: new Set() };
+      folds.set(entry.id, current);
+    }
+    current.entryIds.add(entry.id);
+    current.runIds.add(runId);
+  }
+  return folds;
+}
+
 /**
  * A user message starts every fold and is never hidden or grouped, so the
  * rows before it depend only on the entries before it, their runs, and the
@@ -1429,10 +1474,17 @@ export function deriveThreadFeedPresentation(
       for (const entryId of fold.hiddenEntryIds) collapsedEntryIds.add(entryId);
     }
   }
+  const keepWarmFolds = deriveKeepWarmFolds(sourceFeed);
+  const collapsedKeepWarmIds = new Set(
+    [...keepWarmFolds.values()].flatMap((fold) =>
+      expandedRunIds.has(fold.runId) ? [] : [...fold.entryIds],
+    ),
+  );
   for (let sourceIndex = 0; sourceIndex < sourceFeed.length; sourceIndex += 1) {
     const entry = sourceFeed[sourceIndex]!;
     const feedIndex = retainedFeedIndices[sourceIndex]!;
-    if (isUserMessageEntry(entry)) {
+    // A keep-warm prompt sits inside a fold of back-to-back pings, so it cannot start a restart.
+    if (isUserMessageEntry(entry) && !isKeepWarmEntry(entry)) {
       restarts.push({ entry: feedIndex, rowsLength: result.length });
     }
     const runId = feedEntryRunId(entry);
@@ -1447,6 +1499,21 @@ export function deriveThreadFeedPresentation(
       activeTailGroup?.type === "activity-group" &&
       activeTailGroup.id === entry.id &&
       entry.runId === activeRunId;
+    const keepWarmFold = keepWarmFolds.get(entry.id);
+    if (keepWarmFold) {
+      result.push({
+        type: "run-fold",
+        id: `keep-warm:${keepWarmFold.runId}`,
+        createdAt: keepWarmFold.createdAt,
+        runId: keepWarmFold.runId,
+        label:
+          keepWarmFold.runIds.size === 1
+            ? "Kept context warm"
+            : `Kept context warm ${keepWarmFold.runIds.size} times`,
+        expanded: expandedRunIds.has(keepWarmFold.runId),
+      });
+    }
+    if (collapsedKeepWarmIds.has(entry.id)) continue;
     const fold = foldsByAnchorId.get(entry.id);
     if (fold) {
       const expanded = expandedRunIds.has(fold.runId);

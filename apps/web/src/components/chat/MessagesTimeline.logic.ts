@@ -51,6 +51,7 @@ import {
 import {
   idleCompactionOf,
   isCompactionCommandMessage,
+  isKeepWarmMessage,
   type MessageId,
   type OrchestrationV2IdleCompaction,
   type WorktreeSetupSnapshot,
@@ -998,6 +999,45 @@ function itemizedFailedRunIds(
   );
 }
 
+interface KeepWarmFold {
+  readonly runId: RunId;
+  readonly createdAt: string;
+  readonly entryIds: Set<string>;
+  readonly runIds: Set<RunId>;
+}
+
+/** Back-to-back keep-warm turns fold into one row, keyed by the first entry of the first turn. */
+function deriveKeepWarmFolds(
+  entries: ReadonlyArray<TimelineEntry>,
+): ReadonlyMap<string, KeepWarmFold> {
+  const keepWarmRunIds = new Set<RunId>();
+  for (const entry of entries) {
+    if (
+      entry.kind === "message" &&
+      entry.message.runId !== null &&
+      isKeepWarmMessage(entry.message)
+    )
+      keepWarmRunIds.add(entry.message.runId);
+  }
+  const folds = new Map<string, KeepWarmFold>();
+  if (keepWarmRunIds.size === 0) return folds;
+  let current: KeepWarmFold | null = null;
+  for (const entry of entries) {
+    const runId = entry.kind === "message" ? entry.message.runId : timelineEntryRunId(entry);
+    if (runId === null || !keepWarmRunIds.has(runId)) {
+      current = null;
+      continue;
+    }
+    if (current === null) {
+      current = { runId, createdAt: entry.createdAt, entryIds: new Set(), runIds: new Set() };
+      folds.set(entry.id, current);
+    }
+    current.entryIds.add(entry.id);
+    current.runIds.add(runId);
+  }
+  return folds;
+}
+
 function deriveTurnFolds(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
   terminalAssistantMessageIds: ReadonlySet<string>;
@@ -1463,6 +1503,12 @@ export function deriveMessagesTimelineRows(input: {
     completeSupersededReplyEntryIds: completeSupersededReplyIds,
   });
   const timelineEntryById = new Map(timelineEntries.map((entry) => [entry.id, entry]));
+  const keepWarmFolds = deriveKeepWarmFolds(timelineEntries);
+  const collapsedKeepWarmEntryIds = new Set(
+    [...keepWarmFolds.values()].flatMap((fold) =>
+      input.expandedRunIds?.has(fold.runId) ? [] : [...fold.entryIds],
+    ),
+  );
   const collapsedEntryIds = new Set<string>();
   const collapsedFoldMemberIds = new Set<string>();
   for (const fold of foldsByAnchorEntryId.values()) {
@@ -1692,6 +1738,24 @@ export function deriveMessagesTimelineRows(input: {
 
     if (timelineEntry.id === activeWorkPlacementEntryId) {
       appendActiveWorkRows();
+    }
+
+    const keepWarmFold = keepWarmFolds.get(timelineEntry.id);
+    if (keepWarmFold) {
+      nextRows.push({
+        kind: "turn-fold",
+        id: `keep-warm:${keepWarmFold.runId}`,
+        createdAt: keepWarmFold.createdAt,
+        runId: keepWarmFold.runId,
+        label:
+          keepWarmFold.runIds.size === 1
+            ? "Kept context warm"
+            : `Kept context warm ${keepWarmFold.runIds.size} times`,
+        expanded: input.expandedRunIds?.has(keepWarmFold.runId) ?? false,
+      });
+    }
+    if (collapsedKeepWarmEntryIds.has(timelineEntry.id)) {
+      continue;
     }
 
     // A stopped compaction's own divider already says it stopped.

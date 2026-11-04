@@ -1,4 +1,5 @@
 import {
+  KEEP_WARM_TEXT,
   MessageId,
   CheckpointId,
   CheckpointRef,
@@ -91,6 +92,63 @@ it("keeps historical plan detail accessible from its paged turn item", () => {
     "message",
   ]);
   expect(presented[2]).toMatchObject({ activities: [{ projectedItem: { item } }] });
+});
+
+it("folds back-to-back keep-warm pings into one row, incrementally and fresh", () => {
+  const ping = (n: number): OrchestrationV2ProjectedTurnItem[] => {
+    const pingRunId = RunId.make(`run-ping-${n}`);
+    const at = `2026-06-20T00:0${n}:00.000Z`;
+    return [
+      projected(
+        {
+          ...userMessage(at),
+          id: TurnItemId.make(`ping-${n}`),
+          runId: pingRunId,
+          messageId: MessageId.make(`ping-${n}`),
+          createdBy: "agent",
+          creationSource: "server",
+          text: KEEP_WARM_TEXT,
+        },
+        n * 2 + 2,
+      ),
+      projected(
+        {
+          ...assistantMessage(at),
+          id: TurnItemId.make(`pong-${n}`),
+          runId: pingRunId,
+          messageId: MessageId.make(`pong-${n}`),
+          text: "ok",
+        },
+        n * 2 + 3,
+      ),
+    ];
+  };
+  const turn = [projected(userMessage(), 0), projected(assistantMessage(), 1)];
+  const steps = [1, 2, 3].map((count) => [
+    ...turn,
+    ...[1, 2, 3].slice(0, count).flatMap((n) => ping(n)),
+  ]);
+  const present = (items: OrchestrationV2ProjectedTurnItem[], cache?: ThreadFeedCache) =>
+    deriveThreadFeedPresentation(
+      buildThreadFeed(items, { cache }),
+      null,
+      new Set(),
+      new Set(),
+      null,
+      false,
+      cache,
+    );
+  const cache = createThreadFeedCache();
+  const streamed = steps.map((items) => present(items, cache)).at(-1)!;
+  const fresh = present(steps.at(-1)!);
+  for (const rows of [streamed, fresh]) {
+    expect(rows.map((entry) => entry.id)).toEqual([
+      expect.any(String),
+      expect.any(String),
+      "keep-warm:run-ping-1",
+    ]);
+    expect(rows[2]).toMatchObject({ type: "run-fold", label: "Kept context warm 3 times" });
+  }
 });
 
 it("shows a compact command as one mobile divider before, during, and after compaction", () => {

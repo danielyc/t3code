@@ -19,6 +19,7 @@ import { useNowMinute } from "../../hooks/useNowMinute";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
+import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { formatContextWindowCompactionMessage } from "./ContextWindowMeter.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -132,6 +133,61 @@ export function ThreadDetailsContext({ usage }: { readonly usage: ContextWindowS
             </>
           }
         />
+      </div>
+    </ThreadDetailsSection>
+  );
+}
+
+export interface ThreadDetailsKeepWarmInput {
+  readonly enabled: boolean;
+  /** Set on this thread rather than following the Claude provider default. */
+  readonly overridden: boolean;
+  readonly onChange: (enabled: boolean) => void;
+}
+
+/** Whether T3 Code pings this idle Claude thread just before its prompt cache expires. */
+export function ThreadDetailsKeepWarm({
+  keepWarm,
+  separated,
+}: {
+  readonly keepWarm: ThreadDetailsKeepWarmInput;
+  readonly separated: boolean;
+}) {
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-keep-warm-heading"
+      title="Keep context warm"
+      showHeading={false}
+      separated={separated}
+    >
+      <div className="flex flex-col text-xs">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <label className="flex h-6 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 hover:bg-black/[0.035] data-popup-open:bg-black/[0.035] dark:hover:bg-white/[0.08] dark:data-popup-open:bg-white/[0.08]" />
+            }
+          >
+            <span className="truncate text-muted-foreground">Keep context warm</span>
+            <Switch
+              size="sm"
+              checked={keepWarm.enabled}
+              onCheckedChange={(checked) => keepWarm.onChange(Boolean(checked))}
+              aria-label="Keep context warm"
+            />
+          </TooltipTrigger>
+          <TooltipPopup side="left" sideOffset={16}>
+            <div className="flex max-w-64 flex-col gap-0.5">
+              <span className="text-foreground">
+                {keepWarm.enabled
+                  ? "While idle, a short message just before the prompt cache expires keeps it warm"
+                  : "The prompt cache expires while this thread is idle"}
+              </span>
+              <span className="text-muted-foreground">
+                {keepWarm.overridden ? "Set for this thread" : "Claude provider default"}
+              </span>
+            </div>
+          </TooltipPopup>
+        </Tooltip>
       </div>
     </ThreadDetailsSection>
   );

@@ -330,7 +330,8 @@ export function presentThreadShell(
     snoozedUntil: nullableIso(thread.snoozedUntil ?? null),
     snoozedAt: nullableIso(thread.snoozedAt ?? null),
     limitRecovery: thread.limitRecovery ?? null,
-    keepContextWarm: thread.keepContextWarm ?? null,
+    // Absent from servers without keep-warm, so clients can hide the toggle.
+    ...(thread.keepContextWarm === undefined ? {} : { keepContextWarm: thread.keepContextWarm }),
     pinnedAt: nullableIso(thread.pinnedAt ?? null),
     autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt ?? null),
     pinOrderKey: thread.pinOrderKey ?? null,

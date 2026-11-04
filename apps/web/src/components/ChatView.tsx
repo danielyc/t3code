@@ -69,6 +69,7 @@ import {
   type ThreadId,
   ProviderInteractionMode,
   resolveIdleCompaction,
+  resolveKeepContextWarm,
   RuntimeMode,
 } from "@t3tools/contracts";
 import {
@@ -2499,6 +2500,46 @@ export default function ChatView(props: ChatViewProps) {
     })
       ? activeContextWindow.usedTokens
       : null;
+  // Servers without keep-warm omit the override, so the toggle stays hidden for them.
+  const keepWarmThread =
+    activeThreadShell?.keepContextWarm !== undefined &&
+    providerStatuses.some(
+      (provider) =>
+        provider.instanceId === activeThreadShell.providerInstanceId &&
+        provider.driver === "claudeAgent",
+    )
+      ? activeThreadShell
+      : null;
+  const keepWarm =
+    keepWarmThread === null
+      ? null
+      : {
+          enabled: resolveKeepContextWarm(
+            settings,
+            keepWarmThread.providerInstanceId,
+            keepWarmThread.keepContextWarm,
+          ),
+          overridden: keepWarmThread.keepContextWarm != null,
+          onChange: async (enabled: boolean) => {
+            const followsDefault =
+              enabled === resolveKeepContextWarm(settings, keepWarmThread.providerInstanceId, null);
+            const result = await updateThreadMetadata({
+              environmentId,
+              input: {
+                threadId: keepWarmThread.id,
+                keepContextWarm: followsDefault ? null : enabled,
+              },
+            });
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add({
+                type: "error",
+                title: "Could not change keep context warm",
+                description: error instanceof Error ? error.message : undefined,
+              });
+            }
+          },
+        };
   const [fullHistoryThreadKeys, setFullHistoryThreadKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -3908,6 +3949,7 @@ export default function ChatView(props: ChatViewProps) {
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
                   }}
+                  keepWarm={keepWarm}
                 />
 
                 <PullRequestThreadDialogHost

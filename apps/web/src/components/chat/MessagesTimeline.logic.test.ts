@@ -1,4 +1,4 @@
-import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
+import { KEEP_WARM_TEXT, ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
 import {
   CheckpointRef,
   NodeId,
@@ -902,6 +902,77 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(userRow?.revertTurnCount).toBe(0);
     expect(assistantRow?.assistantTurnDiffSummary).toBe(assistantTurnDiffSummary);
+  });
+
+  it("folds back-to-back keep-warm pings into one row that opens to their exchanges", () => {
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      text: string,
+      runId: string,
+      second: number,
+      origin: { createdBy: "agent" | "user"; creationSource: "server" | "web" },
+    ) => {
+      const createdAt = `2026-01-01T00:00:${String(second).padStart(2, "0")}Z`;
+      return {
+        id: `${id}-entry`,
+        kind: "message" as const,
+        createdAt,
+        message: {
+          id: id as never,
+          role,
+          text,
+          runId: runId as never,
+          createdAt,
+          updatedAt: createdAt,
+          streaming: false,
+          ...origin,
+        },
+      };
+    };
+    const server = { createdBy: "agent", creationSource: "server" } as const;
+    const user = { createdBy: "user", creationSource: "web" } as const;
+    const timelineEntries = [
+      message("user-1", "user", "Build it", "run-1", 0, user),
+      message("assistant-1", "assistant", "Done", "run-1", 1, user),
+      message("ping-1", "user", KEEP_WARM_TEXT, "run-2", 2, server),
+      message("pong-1", "assistant", "ok", "run-2", 3, server),
+      message("ping-2", "user", KEEP_WARM_TEXT, "run-3", 4, server),
+      message("pong-2", "assistant", "ok", "run-3", 5, server),
+      message("user-2", "user", "Next", "run-4", 6, user),
+    ];
+    const rows = (expandedRunIds: ReadonlySet<never>) =>
+      deriveMessagesTimelineRows({
+        timelineEntries,
+        expandedRunIds,
+        isWorking: false,
+        activeTurnStartedAt: null,
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+      });
+
+    const collapsed = rows(new Set());
+    expect(collapsed.map((row) => row.id)).toEqual([
+      "user-1-entry",
+      "assistant-1-entry",
+      "keep-warm:run-2",
+      "user-2-entry",
+    ]);
+    expect(collapsed.find((row) => row.id === "keep-warm:run-2")).toMatchObject({
+      kind: "turn-fold",
+      label: "Kept context warm 2 times",
+      expanded: false,
+    });
+    expect(rows(new Set(["run-2" as never])).map((row) => row.id)).toEqual([
+      "user-1-entry",
+      "assistant-1-entry",
+      "keep-warm:run-2",
+      "ping-1-entry",
+      "pong-1-entry",
+      "ping-2-entry",
+      "pong-2-entry",
+      "user-2-entry",
+    ]);
   });
 
   it("folds the first assistant message and settled work before the terminal response", () => {
