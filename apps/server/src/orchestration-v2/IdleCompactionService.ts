@@ -3,6 +3,7 @@ import {
   IDLE_COMPACTION_TEXT,
   MessageId,
   resolveIdleCompaction,
+  resolveKeepContextWarm,
   resolveProjectProviderInstanceEnabled,
   type RunId,
   type ThreadId,
@@ -43,6 +44,8 @@ export const make = Effect.gen(function* () {
         if (
           !claudeInstance ||
           resolveIdleCompaction(current, thread.providerInstanceId) !== "beforeCacheExpires" ||
+          // Keeping the cache warm wins; compaction applies again once it is off.
+          resolveKeepContextWarm(current, thread.providerInstanceId, thread.keepContextWarm) ||
           !resolveProjectProviderInstanceEnabled(
             current,
             thread.projectId,

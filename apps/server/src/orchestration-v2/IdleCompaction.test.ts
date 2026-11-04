@@ -205,6 +205,7 @@ describe("IdleCompactionService", () => {
     { mode: "beforeCacheExpires", driver: "codex", instance: "custom-codex", reads: 0 },
     { mode: "beforeCacheExpires", driver: "claudeAgent", instance: "custom-claude", reads: 1 },
     { mode: "beforeCacheExpires", unconfigured: true, reads: 1 },
+    { mode: "beforeCacheExpires", keepWarm: true, reads: 0 },
   ] as const)(
     "loads history only for eligible idle compaction: $mode/$override/$enabled/$projectDisabled/$instance/$unconfigured",
     (scenario) => {
@@ -228,6 +229,7 @@ describe("IdleCompactionService", () => {
               ...base.thread,
               providerInstanceId: selectedInstance,
               modelSelection: { ...base.thread.modelSelection, instanceId: selectedInstance },
+              ...("keepWarm" in test ? { keepContextWarm: test.keepWarm } : {}),
             },
             runs: base.runs.map((run) => ({
               ...run,
