@@ -57,6 +57,7 @@ import {
   AuthTerminalOperateScope,
   type AssistantCitation,
   type ChatFileAttachment,
+  isListedThreadLineage,
   isProviderNativeSubagentThread,
   orchestrationV2WorktreePending,
   type EnvironmentId,
@@ -2500,9 +2501,11 @@ export default function ChatView(props: ChatViewProps) {
     })
       ? activeContextWindow.usedTokens
       : null;
-  // Servers without keep-warm omit the override, so the toggle stays hidden for them.
+  // Servers without keep-warm omit the override, so the toggle stays hidden for them. Side chats
+  // and subagents never ping, as they never idle-compact.
   const keepWarmThread =
     activeThreadShell?.keepContextWarm !== undefined &&
+    isListedThreadLineage(activeThreadShell.lineage) &&
     providerStatuses.some(
       (provider) =>
         provider.instanceId === activeThreadShell.providerInstanceId &&

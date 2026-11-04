@@ -157,7 +157,18 @@ describe("keepWarmPingAt", () => {
     ).toEqual({ runId, pingAtMs: NOW_MS + 57 * MINUTE_MS });
   });
 
-  it("skips cold or unknown caches, other providers, goals, failures, and paused threads", () => {
+  it("waits out a snooze that ends before the cache expires", () => {
+    const snoozed = (untilMs: number) => {
+      const data = projection();
+      data.thread = { ...data.thread, snoozedUntil: at(untilMs) };
+      return keepWarmPingAt(data, NOW_MS)?.pingAtMs ?? null;
+    };
+    expect(snoozed(2 * MINUTE_MS)).toBe(NOW_MS + 4 * MINUTE_MS);
+    expect(snoozed(4.5 * MINUTE_MS)).toBe(NOW_MS + 4.5 * MINUTE_MS);
+    expect(snoozed(5 * MINUTE_MS)).toBeNull();
+  });
+
+  it("skips cold or unknown caches, other providers, goals, failures, and archived or settled threads", () => {
     expect(keepWarmPingAt(projection({ ttlMs: 5 * MINUTE_MS, expiresInMs: 0 }), NOW_MS)).toBeNull();
     expect(keepWarmPingAt(projection({}), NOW_MS)).toBeNull();
     const codex = projection();
@@ -173,11 +184,7 @@ describe("keepWarmPingAt", () => {
     const failed = projection();
     failed.runs = [{ ...failed.runs[0]!, status: "failed" }];
     expect(keepWarmPingAt(failed, NOW_MS)).toBeNull();
-    for (const paused of [
-      { archivedAt: at() },
-      { settledAt: at() },
-      { snoozedUntil: at(MINUTE_MS) },
-    ]) {
+    for (const paused of [{ archivedAt: at() }, { settledAt: at() }]) {
       const data = projection();
       data.thread = { ...data.thread, ...paused };
       expect(keepWarmPingAt(data, NOW_MS)).toBeNull();

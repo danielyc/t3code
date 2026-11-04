@@ -28,8 +28,6 @@ export function keepWarmPingAt(
 ): { readonly runId: (typeof runs)[number]["id"]; readonly pingAtMs: number } | null {
   if (thread.deletedAt !== null || thread.archivedAt !== null) return null;
   if (thread.settledAt !== null || thread.settledOverride === "settled") return null;
-  if (thread.snoozedUntil != null && DateTime.toEpochMillis(thread.snoozedUntil) > nowMs)
-    return null;
   if (!isListedThreadLineage(thread.lineage)) return null;
   const latestRun = runs
     .filter((run) => run.status !== "cancelled" || run.startedAt !== null)
@@ -78,5 +76,12 @@ export function keepWarmPingAt(
   const endMs = Date.parse(usage.promptCacheExpiresAt);
   // Once the cache is cold, a ping would pay the full write it exists to avoid.
   if (!Number.isFinite(endMs) || nowMs >= endMs) return null;
-  return { runId: latestRun.id, pingAtMs: endMs - leadMs(usage.promptCacheTtlMs) };
+  // A snooze ends without an event, so wait it out and ping only if the cache outlives it.
+  const snoozedUntilMs =
+    thread.snoozedUntil == null ? nowMs : DateTime.toEpochMillis(thread.snoozedUntil);
+  if (snoozedUntilMs >= endMs) return null;
+  return {
+    runId: latestRun.id,
+    pingAtMs: Math.max(endMs - leadMs(usage.promptCacheTtlMs), snoozedUntilMs),
+  };
 }
