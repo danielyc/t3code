@@ -31,7 +31,7 @@ env:
   UPSTREAM_REPOSITORY: pingdotgg/t3code
   # Each branch lives in this fork and is applied as its diff against upstream
   # main. When one stops applying, merge upstream main into it and rerun.
-  PATCH_BRANCHES: feat/claude-prompt-ghost-text fork/mac-signing-without-passkey-profile
+  PATCH_BRANCHES: feat/claude-prompt-ghost-text fork/mac-signing-without-passkey-profile feat/keep-context-warm
   RELEASE_SUFFIX: -patched
   KEEP_RELEASES: 5
 

@@ -1,6 +1,6 @@
-# T3 Code Nightly with Claude prompt suggestions
+# T3 Code Nightly with Claude prompt suggestions and keep context warm
 
-> **Unofficial build.** This fork republishes every [T3 Code](https://github.com/pingdotgg/t3code) nightly with one extra feature added. It is not made or supported by the T3 team. Report problems with it here, not upstream.
+> **Unofficial build.** This fork republishes every [T3 Code](https://github.com/pingdotgg/t3code) nightly with two extra features added. It is not made or supported by the T3 team. Report problems with it here, not upstream.
 
 **[Download the latest patched nightly](https://github.com/danielyc/t3code/releases)**
 
@@ -9,6 +9,8 @@
 After a Claude turn, the composer shows Claude's suggested next prompt as ghost text, like the Claude Code CLI does. **→** (Right Arrow) or **Tab** puts it in your draft without sending it, and **Esc** hides it. The suggestion comes from the Claude Agent SDK's own `promptSuggestions` option, so it costs no extra model call.
 
 This is [pingdotgg/t3code#17618](https://github.com/pingdotgg/t3code/pull/17618), which was closed because upstream is not taking feature PRs right now. Background: [discussion #6839](https://github.com/pingdotgg/t3code/discussions/6839).
+
+**Keep context warm.** Claude's prompt cache lasts about an hour on a subscription and 5 minutes with an API key. While a Claude thread is idle, T3 Code can send it a short message just before the cache expires, so your next message reads the conversation from cache instead of paying for it again. Each message is a short turn that counts toward your usage, shown as a collapsed **Kept context warm** row. Turn it on per Claude provider (**Settings → Providers → Claude → Keep context warm**, off by default), or per thread with the **Keep context warm** switch in the thread details card.
 
 ## How it stays current
 
@@ -23,7 +25,7 @@ The app updates itself from this fork's releases, so once installed it stays on 
    - Windows: `…-x64.exe` or `…-arm64.exe`
    - Linux: `…-x86_64.AppImage` or `…-arm64.AppImage`
 2. Install it over your existing T3 Code (Nightly). It keeps your threads and settings.
-3. Turn it on: **Settings → Providers → Claude → Prompt suggestions**. It is off by default.
+3. Turn the features on: **Settings → Providers → Claude → Prompt suggestions** and **Keep context warm**. Both are off by default.
 
 ## Going back to the official nightly
 
@@ -37,7 +39,7 @@ You can switch back at any time. Your threads, projects and settings stay where 
    - Linux: use the official AppImage and delete the patched one.
 4. Start it. From then on it updates from upstream again, never from this fork.
 
-On macOS the official app may ask for keychain access once, as when you switched. The official build ignores the Prompt suggestions setting, so if you ever come back here you may need to turn it on again. The `~/.claude/settings.json` change below can stay or go: the Claude Code CLI uses the same setting.
+On macOS the official app may ask for keychain access once, as when you switched. The official build ignores the Prompt suggestions and Keep context warm settings, so if you ever come back here you may need to turn them on again. The `~/.claude/settings.json` change below can stay or go: the Claude Code CLI uses the same setting.
 
 ## Getting suggestions as often as possible
 
@@ -58,8 +60,8 @@ Merge the keys into your existing file rather than replacing it. New Claude sess
 
 ## Limitations
 
-- **Claude only.** Other providers show no suggestions.
-- **Desktop app only.** The web app, `npx t3`, the CLI and the mobile app are the official versions. Suggestions appear only for environments served by the patched desktop app itself, not for remote environments running an official server.
+- **Claude only.** Other providers show no suggestions and never keep their context warm.
+- **Desktop app only.** The web app, `npx t3`, the CLI and the mobile app are the official versions. Both features work only for environments served by the patched desktop app itself, not for remote environments running an official server.
 - **Replaces the official Nightly.** It uses the same app name, settings and data, so the two cannot be installed side by side.
 - **Can lag behind.** When an upstream change conflicts with the patch, no patched build appears until the conflict is fixed, and your app stays on the last patched version.
 - **Nightly channel only.** Switching the update channel to stable in the app's settings finds no updates here.
@@ -76,5 +78,6 @@ Patch branches:
 
 - `feat/claude-prompt-ghost-text`: the prompt suggestions feature.
 - `fork/mac-signing-without-passkey-profile`: lets a Developer ID without T3's passkey profile sign the macOS app.
+- `feat/keep-context-warm`: the keep context warm feature.
 
 Repository secrets for macOS signing: `CSC_LINK` (base64 Developer ID Application `.p12`), `CSC_KEY_PASSWORD`, `APPLE_API_KEY` (contents of the App Store Connect `.p8`), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`.
