@@ -245,6 +245,12 @@ jobs:
           # Public T3 Connect identifiers, the same ones official builds embed.
           cp .env.example .env
 
+      # Upstream packages Windows on Linux, where this hook skips, and its
+      # Windows payload file limit has no room for the cache a native build adds.
+      - name: Skip server compile cache like upstream Windows builds
+        if: matrix.platform == 'win'
+        run: echo 'module.exports = async () => {};' > scripts/prepare-server-compile-cache.cjs
+
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
