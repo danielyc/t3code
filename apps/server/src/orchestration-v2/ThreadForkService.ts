@@ -115,8 +115,6 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
         titleRegeneration: null,
         // Pings spend usage, so a fork follows the default until someone turns it on there.
         keepContextWarm: null,
-        // Side chats share the parent's worktree, so they start supervised.
-        ...(input.sideChat ? { runtimeMode: "approval-required" as const } : {}),
         activeProviderThreadId: null,
         lineage: {
           parentThreadId: input.sourceProjection.thread.id,
