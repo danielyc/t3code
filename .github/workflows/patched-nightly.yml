@@ -19,6 +19,14 @@ on:
         required: false
         default: false
         type: boolean
+      mac_arm64_runner:
+        description: "Runner for macOS arm64. macos-15-intel cross-builds it while Apple silicon runners have no capacity, without the prepared server compile cache."
+        required: false
+        default: macos-15
+        type: choice
+        options:
+          - macos-15
+          - macos-15-intel
 
 concurrency:
   group: patched-nightly
@@ -159,7 +167,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64
-            runner: macos-15
+            runner: ${{ inputs.mac_arm64_runner || 'macos-15' }}
             platform: mac
             target: dmg
             arch: arm64
@@ -389,7 +397,7 @@ jobs:
             status=0
             node scripts/build-desktop-artifact.ts "${args[@]}" 2>&1 | tee "$log" || status=$?
             if [[ "$status" -eq 0 ]]; then break; fi
-            if [[ "$attempt" -ge 2 ]] || ! grep -q -E "ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|The network connection was lost|Failed to staple" "$log"; then
+            if [[ "$attempt" -ge 2 ]] || ! grep -q -E "ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|The network connection was lost|The request timed out|Failed to staple" "$log"; then
               exit "$status"
             fi
             echo "::warning::Build attempt $attempt failed on a network error, retrying."
