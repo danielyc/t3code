@@ -43,6 +43,7 @@ function sendInput(
     readonly promptOutsideWindow?: boolean;
     readonly text?: string;
     readonly threadIdle?: boolean;
+    readonly keepContextWarm?: boolean;
   } = {},
 ) {
   const source = overrides.source ?? claude;
@@ -88,6 +89,9 @@ function sendInput(
       providerInstanceId: source,
       modelSelection: sourceSelection,
       activeProviderThreadId: ProviderThreadId.make("provider-thread-current"),
+      ...(overrides.keepContextWarm === undefined
+        ? {}
+        : { keepContextWarm: overrides.keepContextWarm }),
     },
     providerThreads: [
       providerThread("provider-thread-earlier"),
@@ -211,6 +215,19 @@ describe("shouldCompactBeforeSend", () => {
           [claude]: {
             driver: ProviderDriverKind.make("claudeAgent"),
             config: { idleCompaction: "off" },
+          },
+        },
+      },
+      expected: false,
+    },
+    { name: "while the thread keeps its context warm", keepContextWarm: true, expected: false },
+    {
+      name: "while the Claude instance keeps context warm by default",
+      settings: {
+        providerInstances: {
+          [claude]: {
+            driver: ProviderDriverKind.make("claudeAgent"),
+            config: { keepContextWarm: true },
           },
         },
       },

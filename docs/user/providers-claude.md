@@ -107,7 +107,11 @@ tooltip says whether the thread follows the provider default.
   goal is active. They stop after a failed or stopped turn, or when the cache
   has already expired, and start again after your next turn.
 - While a thread keeps its context warm, **Compact idle threads** does not
-  compact it before the cache expires.
+  apply to it: no compaction before the cache expires, and no **Compact** chip
+  or compaction before sending when you return.
+- Claude Code picks the 5-minute cache on a subscription once it is outside its
+  usage limits. To keep the 1-hour cache, add `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`
+  to the Claude provider's environment variables.
 
 ## Skills
 

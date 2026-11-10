@@ -2,8 +2,7 @@ import {
   CommandId,
   IDLE_COMPACTION_TEXT,
   MessageId,
-  resolveIdleCompaction,
-  resolveKeepContextWarm,
+  resolveThreadIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   type RunId,
   type ThreadId,
@@ -43,9 +42,11 @@ export const make = Effect.gen(function* () {
           : thread.providerInstanceId === "claudeAgent";
         if (
           !claudeInstance ||
-          resolveIdleCompaction(current, thread.providerInstanceId) !== "beforeCacheExpires" ||
-          // Keeping the cache warm wins; compaction applies again once it is off.
-          resolveKeepContextWarm(current, thread.providerInstanceId, thread.keepContextWarm) ||
+          resolveThreadIdleCompaction(
+            current,
+            thread.providerInstanceId,
+            thread.keepContextWarm,
+          ) !== "beforeCacheExpires" ||
           !resolveProjectProviderInstanceEnabled(
             current,
             thread.projectId,
@@ -82,8 +83,11 @@ export const make = Effect.gen(function* () {
           },
         );
         if (
-          resolveIdleCompaction(current, records.thread.providerInstanceId) !==
-            "beforeCacheExpires" ||
+          resolveThreadIdleCompaction(
+            current,
+            records.thread.providerInstanceId,
+            records.thread.keepContextWarm,
+          ) !== "beforeCacheExpires" ||
           !resolveProjectProviderInstanceEnabled(
             current,
             records.thread.projectId,

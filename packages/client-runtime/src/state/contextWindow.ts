@@ -1,5 +1,5 @@
 import {
-  resolveIdleCompaction,
+  resolveThreadIdleCompaction,
   type ModelSelection,
   type OrchestrationV2ProviderTurn,
   type OrchestrationV2ProviderTurnTokenUsage,
@@ -266,7 +266,11 @@ export function shouldCompactBeforeSend(input: {
     provider === undefined ||
     !input.threadIdle ||
     COMPACT_COMMAND_PATTERN.test(input.text) ||
-    resolveIdleCompaction(input.settings, provider.instanceId) === "off" ||
+    resolveThreadIdleCompaction(
+      input.settings,
+      provider.instanceId,
+      projection.thread.keepContextWarm,
+    ) === "off" ||
     !provider.slashCommands.some((command) => command.name === "compact") ||
     resolvePendingHandoff(projection, input.selection, input.providers) !== null ||
     projection.runtimeRequests.some((request) => request.status === "pending") ||

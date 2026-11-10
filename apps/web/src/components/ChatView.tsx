@@ -71,7 +71,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   ProviderInteractionMode,
-  resolveIdleCompaction,
+  resolveThreadIdleCompaction,
   resolveKeepContextWarm,
   RuntimeMode,
 } from "@t3tools/contracts";
@@ -2493,9 +2493,10 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
-    resolveIdleCompaction(
+    resolveThreadIdleCompaction(
       settings,
       activeProviderInstanceId ?? ProviderInstanceId.make("claudeAgent"),
+      activeThreadShell?.keepContextWarm,
     ) !== "off" &&
     !resumeCompactionPermanentlyDismissed &&
     !nativeResumeCompactionDismissed &&

@@ -1564,6 +1564,16 @@ export const resolveKeepContextWarm = (
   );
 };
 
+/** A thread that keeps its context warm is never compacted for idling, in any mode. */
+export const resolveThreadIdleCompaction = (
+  settings: Pick<ServerSettings, "providerInstances" | "compactIdleThreads" | "idleCompaction">,
+  instanceId: ProviderInstanceId,
+  keepContextWarm: boolean | null | undefined,
+): IdleCompactionMode =>
+  resolveKeepContextWarm(settings, instanceId, keepContextWarm)
+    ? "off"
+    : resolveIdleCompaction(settings, instanceId);
+
 export const ServerSettingsOperation = Schema.Literals([
   "normalize",
   "check-exists",
