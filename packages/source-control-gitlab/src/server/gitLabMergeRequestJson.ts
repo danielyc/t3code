@@ -18,7 +18,7 @@ import type {
   PullRequestReactionContent,
   PullRequestReferenceCandidate,
   PullRequestReviewDecision,
-  PullRequestReviewThread,
+  PullRequestConversationThread,
   PullRequestReviewerCandidate,
   PullRequestState,
 } from "@t3tools/contracts";
@@ -149,6 +149,14 @@ const RawDiffRefsSchema = Schema.Struct({
   diff_refs: Schema.optional(Schema.NullOr(RawDiffRefs)),
 });
 
+const RawRevertTargetSchema = Schema.Struct({
+  title: Schema.String,
+  state: Schema.String,
+  target_branch: Schema.String,
+  merge_commit_sha: Schema.optional(Schema.NullOr(Schema.String)),
+  squash_commit_sha: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
 const RawCommitSchema = Schema.Struct({
   id: TrimmedNonEmptyString,
   title: Schema.optional(Schema.NullOr(Schema.String)),
@@ -219,7 +227,10 @@ export interface GitLabMergeRequestDetail extends GitLabMergeRequestListItem {
   readonly viewerCanDeleteBranch?: boolean;
   /** Set by the detail read, which asks GraphQL; REST carries no label permission. */
   readonly viewerCanEditLabels?: boolean;
+  /** Every reviewer id, even one without a username to show, since writes replace the set. */
   readonly reviewerIds: ReadonlyArray<number>;
+  /** The candidate list leads with these, since one page of project users need not reach them. */
+  readonly reviewerUsers: ReadonlyArray<PullRequestActor & { readonly id: number }>;
   readonly autoMergeEnabled?: boolean;
   readonly autoMergeMethod?: PullRequestMergeMethod;
   /** Absent means not counted, not up to date. */
@@ -521,6 +532,10 @@ function toDetail(raw: Schema.Schema.Type<typeof RawMergeRequestSchema>): GitLab
     reviewerIds: (raw.reviewers ?? []).flatMap((reviewer) =>
       reviewer.id === undefined ? [] : [reviewer.id],
     ),
+    reviewerUsers: (raw.reviewers ?? []).flatMap((reviewer) => {
+      const actor = toActor(reviewer);
+      return actor === null || reviewer.id === undefined ? [] : [{ ...actor, id: reviewer.id }];
+    }),
     ...(autoMerge === undefined ? {} : { autoMergeEnabled: autoMerge }),
     ...(autoMerge === true && raw.squash_on_merge === true
       ? { autoMergeMethod: "squash" as const }
@@ -557,6 +572,7 @@ const decodeMergeRequestChanges = decodeJsonResult(
 const decodeDiffEntry = Schema.decodeUnknownExit(RawDiffSchema);
 const decodeDiscussionEntry = Schema.decodeUnknownExit(RawDiscussionSchema);
 const decodeDiffRefs = decodeJsonResult(RawDiffRefsSchema);
+const decodeRevertTarget = decodeJsonResult(RawRevertTargetSchema);
 const decodeViewer = decodeJsonResult(RawViewerSchema);
 const decodeProjectMergeSettings = decodeJsonResult(RawProjectMergeSettingsSchema);
 
@@ -773,7 +789,7 @@ export interface GitLabDiffRefs {
 }
 
 export interface GitLabDiscussions {
-  readonly threads: ReadonlyArray<PullRequestReviewThread>;
+  readonly threads: ReadonlyArray<PullRequestConversationThread>;
   /** GitLab moves a thread onto each new diff that still has its line; this is the last one. */
   readonly diffRefsByThreadId: ReadonlyMap<string, GitLabDiffRefs>;
   /** First notes of unresolved discussions on the MR itself rather than a diff line. */
@@ -792,7 +808,7 @@ export function decodeDiscussionsJson(
   if (!Result.isSuccess(decoded)) {
     return Result.fail(decoded.failure);
   }
-  const threads: PullRequestReviewThread[] = [];
+  const threads: PullRequestConversationThread[] = [];
   const diffRefsByThreadId = new Map<string, GitLabDiffRefs>();
   const overviewFindingIds: string[] = [];
   for (const entry of decoded.success) {
@@ -800,11 +816,30 @@ export function decodeDiscussionsJson(
     if (!Exit.isSuccess(discussion)) continue;
     const notes = (discussion.value.notes ?? []).filter((note) => note.system !== true);
     const root = notes[0];
-    const position = root?.position;
-    if (root !== undefined && !position && root.resolvable === true && root.resolved !== true) {
-      overviewFindingIds.push(String(root.id));
+    if (root === undefined) continue;
+    const comments = notes.map((note) => ({
+      id: String(note.id),
+      author: toActor(note.author),
+      body: note.body ?? "",
+      createdAt: note.created_at,
+      url: null,
+    }));
+    const position = root.position;
+    if (!position) {
+      // A thread started on the overview: resolvable, unlike a single comment.
+      if (root.resolvable !== true) continue;
+      if (root.resolved !== true) overviewFindingIds.push(String(root.id));
+      threads.push({
+        id: discussion.value.id,
+        path: null,
+        line: null,
+        side: "right",
+        isResolved: root.resolved === true,
+        isOutdated: false,
+        comments,
+      });
+      continue;
     }
-    if (root === undefined || !position) continue;
     let side: "left" | "right";
     let path: string | null;
     let line: number | null | undefined;
@@ -834,13 +869,7 @@ export function decodeDiscussionsJson(
       side,
       isResolved: root.resolved === true,
       isOutdated: false,
-      comments: notes.map((note) => ({
-        id: String(note.id),
-        author: toActor(note.author),
-        body: note.body ?? "",
-        createdAt: note.created_at,
-        url: null,
-      })),
+      comments,
     });
   }
   return Result.succeed({
@@ -858,6 +887,28 @@ export function decodeDiffRefsJson(
   if (!Result.isSuccess(decoded)) return Result.fail(decoded.failure);
   const refs = decoded.success.diff_refs;
   return Result.succeed(refs ? toDiffRefs(refs) : null);
+}
+
+export interface GitLabRevertTarget {
+  readonly merged: boolean;
+  readonly title: string;
+  readonly targetBranch: string;
+  /** Null for a fast-forward merge without squash, which records neither SHA. */
+  readonly commitSha: string | null;
+}
+
+export function decodeRevertTargetJson(
+  raw: string,
+): Result.Result<GitLabRevertTarget, DecodeFailure> {
+  const decoded = decodeRevertTarget(raw);
+  if (!Result.isSuccess(decoded)) return Result.fail(decoded.failure);
+  const mr = decoded.success;
+  return Result.succeed({
+    merged: mr.state === "merged",
+    title: mr.title,
+    targetBranch: mr.target_branch,
+    commitSha: trimmed(mr.merge_commit_sha) ?? trimmed(mr.squash_commit_sha),
+  });
 }
 
 export function decodeNotesJson(

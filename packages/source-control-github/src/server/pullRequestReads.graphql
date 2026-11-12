@@ -144,6 +144,7 @@ query PullRequestCore(
         nodes {
           name
           color
+          description
         }
       }
       commits(last: 1) {
@@ -274,6 +275,7 @@ query PullRequestActivity(
           createdAt
           lastEditedAt
           url
+          isMinimized
           author {
             login
             avatarUrl
@@ -295,6 +297,7 @@ query PullRequestActivity(
           submittedAt
           lastEditedAt
           url
+          isMinimized
           author {
             login
             avatarUrl
@@ -409,9 +412,9 @@ query ViewerPermissions($owner: String!, $name: String!, $number: Int!) {
 # taken back. The teams a repository could newly be sent to live on the owning organization and
 # need `read:org`, which a repository-scoped token need not carry, and a query GitHub refuses
 # fails whole, taking the people down with the teams.
-query ReviewerCandidates($owner: String!, $name: String!, $number: Int!) {
+query ReviewerCandidates($owner: String!, $name: String!, $number: Int!, $query: String) {
   repository(owner: $owner, name: $name) {
-    assignableUsers(first: 100) {
+    assignableUsers(first: 100, query: $query) {
       pageInfo {
         hasNextPage
       }
