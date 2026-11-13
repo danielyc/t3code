@@ -199,113 +199,110 @@ describe("KeepWarmService", () => {
     { name: "the instance default", override: null, instanceDefault: true, pings: 1 },
     { name: "the off default", override: null, instanceDefault: false, pings: 0 },
   ] as const)("pings for $name", (test) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* TestClock.setTime(NOW_MS);
-        let data = projection();
-        data = { ...data, thread: { ...data.thread, keepContextWarm: test.override } };
-        const dispatched: Array<string> = [];
-        const streamDone = yield* Deferred.make<void>();
-        const completed = (id: RunId) => ({
-          id: EventId.make(`completed-${id}`),
-          type: "run.updated" as const,
-          threadId,
-          runId: id,
-          occurredAt: at(),
-          payload: { ...data.runs[0]!, id },
-        });
-        const dependencies = Layer.mergeAll(
-          Layer.mock(Orchestrator.OrchestratorV2)({
-            streamDomainEvents: Stream.make(completed(runId)).pipe(
-              Stream.ensuring(Deferred.succeed(streamDone, undefined)),
-            ),
-            dispatch: (command) =>
-              Effect.sync(() => {
-                dispatched.push(command.commandId);
-                return { sequence: 1, storedEvents: [] };
-              }),
-          }),
-          Layer.mock(ProjectionStore.ProjectionStoreV2)({
-            getThread: () => Effect.succeed(data.thread),
-            getThreadRecords: () => Effect.succeed(data),
-            listActiveShellIndex: () => Effect.succeed([]),
-          }),
-          Layer.mock(ServerSettings.ServerSettingsService)({
-            getSettings: Effect.succeed({
-              ...DEFAULT_SERVER_SETTINGS,
-              providerInstances: {
-                [instanceId]: {
-                  driver: ProviderDriverKind.make("claudeAgent"),
-                  enabled: true,
-                  config: { keepContextWarm: test.instanceDefault },
-                },
-              },
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW_MS);
+      let data = projection();
+      data = { ...data, thread: { ...data.thread, keepContextWarm: test.override } };
+      const dispatched: Array<string> = [];
+      const streamDone = yield* Deferred.make<void>();
+      const completed = (id: RunId) => ({
+        id: EventId.make(`completed-${id}`),
+        type: "run.updated" as const,
+        threadId,
+        runId: id,
+        occurredAt: at(),
+        payload: { ...data.runs[0]!, id },
+      });
+      const dependencies = Layer.mergeAll(
+        Layer.mock(Orchestrator.OrchestratorV2)({
+          streamDomainEvents: Stream.make(completed(runId)).pipe(
+            Stream.ensuring(Deferred.succeed(streamDone, undefined)),
+          ),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              dispatched.push(command.commandId);
+              return { sequence: 1, storedEvents: [] };
             }),
-            streamChanges: Stream.empty,
+        }),
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getThread: () => Effect.succeed(data.thread),
+          getThreadRecords: () => Effect.succeed(data),
+          listActiveShellIndex: () => Effect.succeed([]),
+        }),
+        Layer.mock(ServerSettings.ServerSettingsService)({
+          getSettings: Effect.succeed({
+            ...DEFAULT_SERVER_SETTINGS,
+            providerInstances: {
+              [instanceId]: {
+                driver: ProviderDriverKind.make("claudeAgent"),
+                enabled: true,
+                config: { keepContextWarm: test.instanceDefault },
+              },
+            },
           }),
-        );
-        yield* Effect.gen(function* () {
-          const service = yield* KeepWarmService.make;
-          yield* service.start();
-          yield* Deferred.await(streamDone);
-          yield* TestClock.adjust(3 * MINUTE_MS);
-          expect(dispatched).toEqual([]);
-          yield* TestClock.adjust(MINUTE_MS);
-        }).pipe(Effect.provide(dependencies));
-        expect(dispatched).toEqual(test.pings === 1 ? ["server:keep-warm:warm-thread:run-1"] : []);
-      }),
-    ),
+          streamChanges: Stream.empty,
+        }),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* KeepWarmService.make;
+        yield* service.start();
+        yield* Deferred.await(streamDone);
+        yield* TestClock.adjust(3 * MINUTE_MS);
+        expect(dispatched).toEqual([]);
+        yield* TestClock.adjust(MINUTE_MS);
+      }).pipe(Effect.provide(dependencies));
+      expect(dispatched).toEqual(test.pings === 1 ? ["server:keep-warm:warm-thread:run-1"] : []);
+    }),
   );
 
   it.effect("arms threads that were already idle when the server starts", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        yield* TestClock.setTime(NOW_MS);
-        const base = projection();
-        const data = { ...base, thread: { ...base.thread, keepContextWarm: true } };
-        const dispatched: Array<string> = [];
-        const scanned = yield* Deferred.make<void>();
-        const dependencies = Layer.mergeAll(
-          Layer.mock(Orchestrator.OrchestratorV2)({
-            streamDomainEvents: Stream.never,
-            dispatch: (command) =>
-              Effect.sync(() => {
-                dispatched.push(command.commandId);
-                return { sequence: 1, storedEvents: [] };
-              }),
-          }),
-          Layer.mock(ProjectionStore.ProjectionStoreV2)({
-            getThread: () => Effect.succeed(data.thread),
-            getThreadRecords: () => Effect.succeed(data),
-            listActiveShellIndex: () =>
-              Deferred.succeed(scanned, undefined).pipe(
-                Effect.as([
-                  {
-                    id: threadId,
-                    projectId: data.thread.projectId,
-                    lineage: data.thread.lineage,
-                    settledOverride: null,
-                    settledAt: null,
-                    pinnedAt: null,
-                    snoozedUntil: null,
-                    mayBeLive: false,
-                  },
-                ]),
-              ),
-          }),
-          Layer.mock(ServerSettings.ServerSettingsService)({
-            getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
-            streamChanges: Stream.empty,
-          }),
-        );
-        yield* Effect.gen(function* () {
-          const service = yield* KeepWarmService.make;
-          yield* service.start();
-          yield* Deferred.await(scanned);
-          yield* TestClock.adjust(4 * MINUTE_MS);
-        }).pipe(Effect.provide(dependencies));
-        expect(dispatched).toEqual(["server:keep-warm:warm-thread:run-1"]);
-      }),
-    ),
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW_MS);
+      const base = projection();
+      const data = { ...base, thread: { ...base.thread, keepContextWarm: true } };
+      const dispatched: Array<string> = [];
+      const scanned = yield* Deferred.make<void>();
+      const dependencies = Layer.mergeAll(
+        Layer.mock(Orchestrator.OrchestratorV2)({
+          streamDomainEvents: Stream.never,
+          dispatch: (command) =>
+            Effect.sync(() => {
+              dispatched.push(command.commandId);
+              return { sequence: 1, storedEvents: [] };
+            }),
+        }),
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getThread: () => Effect.succeed(data.thread),
+          getThreadRecords: () => Effect.succeed(data),
+          listActiveShellIndex: () =>
+            Deferred.succeed(scanned, undefined).pipe(
+              Effect.as([
+                {
+                  id: threadId,
+                  projectId: data.thread.projectId,
+                  lineage: data.thread.lineage,
+                  settledOverride: null,
+                  settledAt: null,
+                  pinnedAt: null,
+                  snoozedUntil: null,
+                  mayBeLive: false,
+                  hasRemoteTasks: false,
+                },
+              ]),
+            ),
+        }),
+        Layer.mock(ServerSettings.ServerSettingsService)({
+          getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+          streamChanges: Stream.empty,
+        }),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* KeepWarmService.make;
+        yield* service.start();
+        yield* Deferred.await(scanned);
+        yield* TestClock.adjust(4 * MINUTE_MS);
+      }).pipe(Effect.provide(dependencies));
+      expect(dispatched).toEqual(["server:keep-warm:warm-thread:run-1"]);
+    }),
   );
 });
