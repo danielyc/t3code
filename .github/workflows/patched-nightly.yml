@@ -303,6 +303,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsecret-1-dev pkg-config imagemagick
 
+      # The Apple Speech helper needs the macOS 26 SDK. Upstream builds on
+      # macos-26 runners; the macos-15 images default to Xcode 16 but ship 26.
+      - name: Select Xcode 26
+        if: matrix.platform == 'mac'
+        run: |
+          set -euo pipefail
+          xcode=$(ls -d /Applications/Xcode_26*.app | grep -v -i beta | sort -V | tail -n 1)
+          echo "Using $xcode"
+          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+
       - name: Align package versions
         run: node scripts/update-release-package-versions.ts "$VERSION"
 
