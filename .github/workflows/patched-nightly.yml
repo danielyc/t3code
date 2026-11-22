@@ -259,11 +259,13 @@ jobs:
         if: matrix.platform == 'win'
         run: echo 'module.exports = async () => {};' > scripts/prepare-server-compile-cache.cjs
 
+      # The Intel macOS runner takes over 30 minutes to restore and save the
+      # 4 GB store cache, longer than the build itself.
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
-          cache: ${{ matrix.platform != 'win' }}
+          cache: ${{ matrix.platform != 'win' && matrix.runner != 'macos-15-intel' }}
           run-install: true
 
       - name: Cache resource monitor
